@@ -558,16 +558,16 @@ shapeFuncParams=sfp, windowFunction=wf, limits={limits})".format(name=name, klas
                :math:`2 \\pi / (Q_{max}-Q_{min})`.
         """
         if dr is None:
-            bin  = 2.*PI/self.__qmax
-            rbin = round(bin,1)
-            if rbin>bin:
+            dbin  = 2.*PI/self.__qmax
+            rbin = round(dbin,1)
+            if rbin>dbin:
                 rbin -= 0.1
-            bin = FLOAT_TYPE( rbin  )
+            dbin = FLOAT_TYPE( rbin  )
         else:
             assert is_number(dr), LOGGER.error("dr must be None or a number")
-            bin = FLOAT_TYPE(dr)
+            dbin = FLOAT_TYPE(dr)
         self.__dr = dr
-        self.__bin = bin
+        self.__bin = dbin
         # dump to repository
         self._dump_to_repository({'_StructureFactorConstraint__dr': self.__dr,
                                   '_StructureFactorConstraint__bin': self.__bin})

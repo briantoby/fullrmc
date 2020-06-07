@@ -412,12 +412,15 @@ class BondsAngleConstraint(RigidConstraint, SingularConstraint):
             # get definition for this molecule
             thisDef = anglesDef[val["name"]]
             for angle in thisDef:
-                centralIdx = indexes[ names.index(angle[0]) ]
-                leftIdx    = indexes[ names.index(angle[1]) ]
-                rightIdx   = indexes[ names.index(angle[2]) ]
-                lower      = angle[3]
-                upper      = angle[4]
-                anglesList.append((centralIdx, leftIdx, rightIdx, lower, upper))
+                try:
+                    centralIdx = indexes[ names.index(angle[0]) ]
+                    leftIdx    = indexes[ names.index(angle[1]) ]
+                    rightIdx   = indexes[ names.index(angle[2]) ]
+                    lower      = angle[3]
+                    upper      = angle[4]
+                    anglesList.append((centralIdx, leftIdx, rightIdx, lower, upper))
+                except ValueError:
+                    continue
         # create angles
         self.__dumpAngles = False
         try:

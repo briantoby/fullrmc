@@ -58,7 +58,7 @@ class InterceptHook(object):
     of a running engine.
 
 
-    .. code-block:: python
+    . code-block:: python
 
         # import fullrmc's InterceptHook
         from fullrmc import InterceptHook
@@ -66,16 +66,16 @@ class InterceptHook(object):
         # create hook
         hook = InterceptHook(path='my_engine.rmc')
 
-        # safely force stopping running engine
+        # to safely force stopping running engine
         hook.stop_engine()
 
-        # safely force saving running engine
+        # to safely force saving running engine
         hook.save_engine()
 
-        # safely export a pdb file of the current engine structure status
+        # to safely export a pdb file of the current engine structure status
         hook.export_pdb()
 
-        # safely reset standard error during engine runtime
+        # to safely reset standard error during engine runtime
         hook.reset_standard_error()
 
     """
@@ -106,7 +106,6 @@ class InterceptHook(object):
 
     @classmethod
     def get_engine_hook(cls, engine):
-        """Get engine instance intercept hook"""
         locker = engine._get_repository().locker
         hook   = InterceptHook(None,None)
         hook._InterceptHook__hook = locker
@@ -114,14 +113,12 @@ class InterceptHook(object):
 
     @classmethod
     def clear(cls, engine):
-        """release all unexecuted hooks from engine"""
         locker = engine._Engine__repository.locker
         for m in ['stop_engine','save_engine','export_pdb','reset_standard_error']:
             _ = locker.pop_message(m)
 
     @classmethod
-    def _intercept(cls, engine, step, restartPdb, _frame, _usedConstraints, _constraints, _lastSavedTotalStandardError):
-        """meant for internal use only"""
+    def intercept(cls, engine, step, restartPdb, _frame, _usedConstraints, _constraints, _lastSavedTotalStandardError):
         locker    = engine._Engine__repository.locker
         usedFrame = engine.usedFrame
         stop      = False
@@ -265,9 +262,8 @@ class Engine(object):
         if self.is_engine(path):
             if freshStart:
                 rep = Repository(timeout=self.__timeout, password=self.__password)
-                rep.DEBUG_PRINT_FAILED_TRIALS = False
+                rep.DEBUG_PRINT_FAILED_TRIALS = True
                 rep.remove_repository(path, removeEmptyDirs=True)
-                rep.close()
             else:
                 m  = "An Engine is found at '%s'. "%path
                 m += "If you wish to override it set freshStart argument to True. "
@@ -1387,6 +1383,12 @@ class Engine(object):
         engine.groupSelector.set_engine(engine)
         # return engine instance
         return engine
+    
+    def close(self):
+        """
+        Return lock on ENGINE repository & close it without saving
+        """
+        self._Engine__repository.close()
 
     def set_log_file(self, logFile):
         """
@@ -2999,8 +3001,8 @@ class Engine(object):
 
     def compute_total_standard_error(self, constraints, current="standardError"):
         """
-        Compute the total standard error as the sum of all constraints'
-        standard error.
+        Compute the total standard error (= chi^2) as the sum of all constraints'
+        standard error. Also accumulates contributions in self.TSE
 
         .. math::
             \\chi^{2} = \\sum \\limits_{i}^{N} (\\frac{stdErr_{i}}{variance_{i}})^{2}
@@ -3021,12 +3023,12 @@ class Engine(object):
             #. totalStandardError (list): The computed total total standard
                error.
         """
-        TSE = []
+        self.TSE = []
         for c in constraints:
             SD = getattr(c, current)
             assert SD is not None, LOGGER.error("constraint %s %s is not computed yet. Try to initialize constraint"%(c.__class__.__name__,current))
-            TSE.append(SD/c.varianceSquared)
-        return np.sum(TSE)
+            self.TSE.append(SD/c.varianceSquared)
+        return np.sum(self.TSE)
 
     def update_total_standard_error(self):
         """
@@ -3270,7 +3272,12 @@ class Engine(object):
             # log new successful move
             triedRatio    = 100.*(float(self.__tried)/float(self.__generated))
             acceptedRatio = 100.*(float(self.__accepted)/float(self.__generated))
-            LOGGER.accepted("@%s Gen:%i - Tr:%i(%.3f%%) - Acc:%i(%.3f%%) - Rem:%i(%.3f%%) - Err:%.6f" %(self.__usedFrame, self.__generated , self.__tried, triedRatio, self.__accepted, acceptedRatio, self.__removed[1], 100.*self.__removed[2], self.__totalStandardError))
+            logstr = "@%s Gen:%i - Tr:%i(%.3f%%) - Acc:%i(%.3f%%) - Rem:%i(%.3f%%) - Err:%.6f" \
+                %(self.__usedFrame, self.__generated , self.__tried, triedRatio, self.__accepted, acceptedRatio, 
+                self.__removed[1], 100.*self.__removed[2], self.__totalStandardError)
+            for item in self.TSE:
+                logstr += ', %.6f'%item
+            LOGGER.accepted(logstr)
         # return _moveTried and _rejectRemove flags
         return True, _rejectRemove
 
@@ -3339,7 +3346,12 @@ class Engine(object):
             # log new successful move
             triedRatio    = 100.*(float(self.__tried)/float(self.__generated))
             acceptedRatio = 100.*(float(self.__accepted)/float(self.__generated))
-            LOGGER.accepted("@%s Gen:%i - Tr:%i(%.3f%%) - Acc:%i(%.3f%%) - Rem:%i(%.3f%%) - Err:%.6f" %(self.__usedFrame,self.__generated , self.__tried, triedRatio, self.__accepted, acceptedRatio, self.__removed[1], 100.*self.__removed[2],self.__totalStandardError))
+            logstr = "@%s Gen:%i - Tr:%i(%.3f%%) - Acc:%i(%.3f%%) - Rem:%i(%.3f%%) - Err:%.6f" \
+                %(self.__usedFrame, self.__generated , self.__tried, triedRatio, self.__accepted, acceptedRatio, 
+                self.__removed[1], 100.*self.__removed[2], self.__totalStandardError)
+            for item in self.TSE:
+                logstr += ', %.6f'%item
+            LOGGER.accepted(logstr)
         # return _moveTried and rejectMove flags
         return _moveTried, rejectMove
 
@@ -3457,13 +3469,13 @@ class Engine(object):
         LOGGER.info("Engine @%s started %i steps, total standard error is: %.6f"%( self.__usedFrame, _numberOfSteps, self.__totalStandardError) )
         for step in xrange(_numberOfSteps):
             ## intercept hook action
-            stop, _lastSavedTotalStandardError = InterceptHook._intercept(engine=self,
-                                                                          step=step,
-                                                                          restartPdb=restartPdb,
-                                                                          _frame=_frame,
-                                                                          _usedConstraints=_usedConstraints,
-                                                                          _constraints=_constraints,
-                                                                          _lastSavedTotalStandardError=_lastSavedTotalStandardError)
+            stop, _lastSavedTotalStandardError = InterceptHook.intercept(engine=self,
+                                                                         step=step,
+                                                                         restartPdb=restartPdb,
+                                                                         _frame=_frame,
+                                                                         _usedConstraints=_usedConstraints,
+                                                                         _constraints=_constraints,
+                                                                         _lastSavedTotalStandardError=_lastSavedTotalStandardError)
             if stop:
                 return
 

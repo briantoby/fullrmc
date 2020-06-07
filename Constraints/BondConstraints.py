@@ -388,11 +388,14 @@ class BondConstraint(RigidConstraint, SingularConstraint):
             # get definition for this molecule
             thisDef = bondsDef[val["name"]]
             for bond in thisDef:
-                idx1  = indexes[ names.index(bond[0]) ]
-                idx2  = indexes[ names.index(bond[1]) ]
-                lower = bond[2]
-                upper = bond[3]
-                bondsList.append((idx1, idx2, lower, upper))
+                try:
+                    idx1  = indexes[ names.index(bond[0]) ]
+                    idx2  = indexes[ names.index(bond[1]) ]
+                    lower = bond[2]
+                    upper = bond[3]
+                    bondsList.append((idx1, idx2, lower, upper))
+                except ValueError:      #skip missing partial occupancy atoms
+                    continue    
         # create bonds
         self.__dumpBonds = False
         try:
